@@ -27,13 +27,19 @@ The script will:
 irm https://raw.githubusercontent.com/treydoesdevops/benchmark-setup/main/remove_benchmark_target.ps1 | iex
 ```
 
-Add `-RemoveOpenSSH` if you also want to uninstall the SSH server.
+To also uninstall OpenSSH Server (only if it wasn't installed before setup):
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/treydoesdevops/benchmark-setup/main/remove_benchmark_target.ps1))) -RemoveOpenSSH
+```
 
 **Linux**:
 ```bash
 curl -sL https://raw.githubusercontent.com/treydoesdevops/benchmark-setup/main/remove_benchmark_target.sh | sudo bash
 ```
 
-Add `-- --remove-ssh` if you also want to uninstall the SSH server.
+To also uninstall the SSH server:
+```bash
+curl -sL https://raw.githubusercontent.com/treydoesdevops/benchmark-setup/main/remove_benchmark_target.sh | sudo bash -s -- --remove-ssh
+```
 
 The removal script undoes everything: deletes the service account, removes the SSH key, and removes the firewall rule.

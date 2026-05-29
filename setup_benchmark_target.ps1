@@ -101,7 +101,10 @@ $keyPresent = (Test-Path $AuthKeysFile) -and
     (Select-String -Path $AuthKeysFile -Pattern ([regex]::Escape($PublicKey)) -Quiet)
 
 if (-not $keyPresent) {
-    Add-Content -Path $AuthKeysFile -Value $PublicKey -Encoding UTF8
+    # Use no-BOM UTF-8 — PowerShell 5's Add-Content -Encoding UTF8 writes a BOM
+    # which some OpenSSH builds handle poorly.
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::AppendAllText($AuthKeysFile, "$PublicKey`n", $utf8NoBom)
     Write-Done "Public key added."
 } else {
     Write-Skip "Public key already present."

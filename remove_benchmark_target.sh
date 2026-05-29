@@ -36,7 +36,12 @@ if systemctl is-active --quiet firewalld 2>/dev/null; then
     if [[ -n "$LAN_SUBNET" ]]; then
         firewall-cmd --quiet --permanent \
             --remove-rich-rule="rule family=ipv4 source address=\"$LAN_SUBNET\" service name=\"ssh\" accept" \
-            2>/dev/null && done_ "firewalld rule removed." || skip "firewalld rule not found."
+            2>/dev/null && done_ "firewalld LAN rule removed." || skip "firewalld LAN rule not found."
+        # Restore the unrestricted ssh service that setup removed
+        if ! firewall-cmd --quiet --query-service=ssh 2>/dev/null; then
+            firewall-cmd --quiet --permanent --add-service=ssh
+            done_ "Restored unrestricted SSH service in active zone."
+        fi
         firewall-cmd --quiet --reload
     else
         skip "Could not detect LAN subnet — firewall rule not removed."

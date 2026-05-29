@@ -20,20 +20,6 @@ skip() { printf '  \033[90m[-]\033[0m %s\n' "$*"; }
 printf '\n  \033[1mBenchmark Ansible Target Setup\033[0m\n'
 printf '  ────────────────────────────────────\n'
 
-# ── Detect distro family ───────────────────────────────────────────────────────
-if [[ -f /etc/os-release ]]; then
-    # shellcheck source=/dev/null
-    source /etc/os-release
-    DISTRO_ID="${ID:-unknown}"
-    DISTRO_LIKE="${ID_LIKE:-}"
-else
-    DISTRO_ID='unknown'
-    DISTRO_LIKE=''
-fi
-
-is_arch()   { [[ "$DISTRO_ID" == "arch"   || "$DISTRO_LIKE" == *arch*   ]]; }
-is_fedora() { [[ "$DISTRO_ID" == "fedora" || "$DISTRO_LIKE" == *fedora* || "$DISTRO_ID" == "bazzite" ]]; }
-
 # ── Detect LAN subnet ─────────────────────────────────────────────────────────
 step "Detecting LAN subnet..."
 IFACE=$(ip route show default 2>/dev/null | awk '/default/ { print $5; exit }')
@@ -109,7 +95,15 @@ if [[ -z "$LAN_SUBNET" ]]; then
     skip "No LAN subnet detected — skipping firewall rule."
 elif systemctl is-active --quiet firewalld 2>/dev/null; then
     # firewalld (Bazzite, Fedora, and some CachyOS setups)
-    # Remove any previous rule with our name tag, then add a fresh one
+    #
+    # If the zone already has the unrestricted 'ssh' service open (common on
+    # Bazzite/Fedora), our LAN-restricted rich rule would be redundant — the
+    # broader service rule would still allow anyone in. Remove it first.
+    if firewall-cmd --quiet --query-service=ssh 2>/dev/null; then
+        firewall-cmd --quiet --permanent --remove-service=ssh
+        done_ "Removed unrestricted SSH service from active zone."
+    fi
+    # Remove any previous LAN rule we added, then add a fresh one
     firewall-cmd --quiet --permanent \
         --remove-rich-rule="rule family=ipv4 source address=\"$LAN_SUBNET\" service name=\"ssh\" accept" \
         2>/dev/null || true
