@@ -22,7 +22,7 @@ printf '  ───────────────────────�
 
 # ── Detect LAN subnet ─────────────────────────────────────────────────────────
 step "Detecting LAN subnet..."
-IFACE=$(ip route show default 2>/dev/null | awk '/default/ { print $5; exit }')
+IFACE=$(ip route get 8.8.8.8 2>/dev/null | awk 'NR==1 { for(i=1;i<=NF;i++) if($i=="dev") { print $(i+1); exit } }')
 if [[ -z "$IFACE" ]]; then
     echo "  [!] Could not detect default network interface — firewall rule will be skipped." >&2
     LAN_SUBNET=''
