@@ -95,13 +95,12 @@ SUDOERS_FILE="/etc/sudoers.d/$SERVICE_USER"
 if [[ -f "$SUDOERS_FILE" ]]; then
     skip "Sudoers entry already exists."
 else
-    # Restrict to package managers only — no arbitrary command execution.
-    # Covers dnf (Fedora/Bazzite), rpm-ostree (Bazzite immutable), pacman (Arch/CachyOS).
-    cat > "$SUDOERS_FILE" << EOF
-$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/dnf, /usr/bin/rpm-ostree, /usr/bin/pacman
-EOF
+    # NOPASSWD: ALL is required — Ansible become wraps commands in /bin/sh so
+    # specific-binary rules won't match. This account has no password and
+    # SSH key auth only, so sudo access requires compromising the private key.
+    echo "$SERVICE_USER ALL=(root) NOPASSWD: ALL" > "$SUDOERS_FILE"
     chmod 440 "$SUDOERS_FILE"
-    done_ "Sudoers entry created (package managers only: dnf, rpm-ostree, pacman)."
+    done_ "Sudoers entry created (NOPASSWD: ALL — locked account, key auth only)."
 fi
 
 # ── Firewall ───────────────────────────────────────────────────────────────────
