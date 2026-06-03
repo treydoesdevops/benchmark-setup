@@ -137,9 +137,13 @@ SUDOERS_FILE="/etc/sudoers.d/$SERVICE_USER"
 if [[ -f "$SUDOERS_FILE" ]]; then
     skip "Sudoers entry already exists."
 else
-    echo "$SERVICE_USER ALL=(root) NOPASSWD: ALL" > "$SUDOERS_FILE"
+    # Restrict to package managers only — no arbitrary command execution.
+    # Covers dnf (Fedora/Bazzite), rpm-ostree (Bazzite immutable), pacman (Arch/CachyOS).
+    cat > "$SUDOERS_FILE" << EOF
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/dnf, /usr/bin/rpm-ostree, /usr/bin/pacman
+EOF
     chmod 440 "$SUDOERS_FILE"
-    done_ "Sudoers entry created (NOPASSWD: ALL — dedicated benchmark machine)."
+    done_ "Sudoers entry created (package managers only: dnf, rpm-ostree, pacman)."
 fi
 
 # ── Firewall ───────────────────────────────────────────────────────────────────
