@@ -88,6 +88,18 @@ else
     skip "SSH service already running."
 fi
 
+# ── Sudoers (allows Ansible to install packages and manage power state) ────────
+step "Configuring sudoers for '$SERVICE_USER'..."
+
+SUDOERS_FILE="/etc/sudoers.d/$SERVICE_USER"
+if [[ -f "$SUDOERS_FILE" ]]; then
+    skip "Sudoers entry already exists."
+else
+    echo "$SERVICE_USER ALL=(root) NOPASSWD: ALL" > "$SUDOERS_FILE"
+    chmod 440 "$SUDOERS_FILE"
+    done_ "Sudoers entry created (NOPASSWD: ALL — dedicated benchmark machine)."
+fi
+
 # ── Firewall ───────────────────────────────────────────────────────────────────
 step "Configuring firewall..."
 
