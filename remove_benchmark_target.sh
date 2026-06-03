@@ -29,7 +29,7 @@ printf '  ───────────────────────�
 
 # ── Firewall ───────────────────────────────────────────────────────────────────
 if systemctl is-active --quiet firewalld 2>/dev/null; then
-    IFACE=$(ip route show default 2>/dev/null | awk '/default/ { print $5; exit }')
+    IFACE=$(ip route get 8.8.8.8 2>/dev/null | awk 'NR==1 { for(i=1;i<=NF;i++) if($i=="dev") { print $(i+1); exit } }')
     IP_PREFIX=$(ip -4 addr show dev "$IFACE" 2>/dev/null | awk '/inet / { print $2; exit }')
     LAN_SUBNET=$(python3 -c \
         "import ipaddress; print(str(ipaddress.ip_interface('$IP_PREFIX').network))" 2>/dev/null || true)
