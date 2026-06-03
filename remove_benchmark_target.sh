@@ -36,31 +36,6 @@ else
     skip "Sudoers entry not found."
 fi
 
-# ── Wake-on-LAN ────────────────────────────────────────────────────────────────
-IFACE=$(ip route get 8.8.8.8 2>/dev/null | awk 'NR==1 { for(i=1;i<=NF;i++) if($i=="dev") { print $(i+1); exit } }')
-if [[ -n "$IFACE" ]]; then
-    if command -v nmcli &>/dev/null; then
-        CONN=$(nmcli -t -f NAME,DEVICE connection show --active 2>/dev/null \
-            | grep ":${IFACE}$" | cut -d: -f1 | head -1)
-        if [[ -n "$CONN" ]]; then
-            nmcli connection modify "$CONN" 802-3-ethernet.wake-on-lan default &>/dev/null
-            nmcli connection up "$CONN" &>/dev/null || true
-            done_ "WoL reset to default via NetworkManager."
-        else
-            skip "No active NetworkManager connection found for $IFACE."
-        fi
-    fi
-    UDEV_RULE="/etc/udev/rules.d/81-wol-${IFACE}.rules"
-    if [[ -f "$UDEV_RULE" ]]; then
-        rm -f "$UDEV_RULE"
-        done_ "WoL udev rule removed."
-    else
-        skip "WoL udev rule not found."
-    fi
-else
-    skip "Could not detect network interface — WoL not modified."
-fi
-
 # ── Firewall ───────────────────────────────────────────────────────────────────
 if systemctl is-active --quiet firewalld 2>/dev/null; then
     IFACE=$(ip route get 8.8.8.8 2>/dev/null | awk 'NR==1 { for(i=1;i<=NF;i++) if($i=="dev") { print $(i+1); exit } }')

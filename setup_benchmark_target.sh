@@ -72,48 +72,6 @@ chmod 600 "$AUTH_KEYS"
 chown "$SERVICE_USER:$SERVICE_USER" "$AUTH_KEYS"
 done_ "Permissions set (700/600)."
 
-# ── Wake-on-LAN ───────────────────────────────────────────────────────────────
-step "Configuring Wake-on-LAN..."
-
-MAC=$(ip link show dev "$IFACE" 2>/dev/null | awk '/ether/ { print $2 }')
-
-if [[ -z "$MAC" ]]; then
-    echo "  [!] Could not read MAC address for $IFACE — skipping WoL setup."
-elif [[ -d "/sys/class/net/$IFACE/wireless" ]]; then
-    skip "$IFACE is a wireless interface — WoL is not supported over WiFi."
-    MAC=''
-else
-    WOL_ENABLED=false
-
-    # NetworkManager (Fedora/Bazzite/CachyOS desktop)
-    if command -v nmcli &>/dev/null; then
-        CONN=$(nmcli -t -f NAME,DEVICE connection show --active 2>/dev/null \
-            | grep ":${IFACE}$" | cut -d: -f1 | head -1)
-        if [[ -n "$CONN" ]]; then
-            nmcli connection modify "$CONN" 802-3-ethernet.wake-on-lan magic &>/dev/null
-            nmcli connection up "$CONN" &>/dev/null || true
-            WOL_ENABLED=true
-            done_ "WoL enabled via NetworkManager (connection: $CONN)."
-        fi
-    fi
-
-    # Fallback: ethtool + udev rule
-    if ! $WOL_ENABLED; then
-        if command -v ethtool &>/dev/null; then
-            ethtool -s "$IFACE" wol g 2>/dev/null || true
-            cat > "/etc/udev/rules.d/81-wol-${IFACE}.rules" << EOF
-ACTION=="add", SUBSYSTEM=="net", NAME=="${IFACE}", RUN+="/sbin/ethtool -s ${IFACE} wol g"
-EOF
-            WOL_ENABLED=true
-            done_ "WoL enabled via ethtool + udev rule."
-        else
-            echo "  [!] Neither nmcli nor ethtool found — enable WoL manually in BIOS/NIC settings."
-        fi
-    fi
-
-    done_ "MAC address: $MAC"
-fi
-
 # ── SSH service ────────────────────────────────────────────────────────────────
 step "Checking SSH service..."
 
@@ -197,11 +155,4 @@ printf '  \033[90m    linux:\033[0m\n'
 printf '  \033[90m      hosts:\033[0m\n'
 printf '  \033[33m        %s:\033[0m\n' "$HOSTNAME_SHORT"
 printf '  \033[33m          ansible_host: %s\033[0m\n' "$LOCAL_IP"
-
-if [[ -n "$MAC" ]]; then
-    printf '\n  Add to linux_playbook/inventory/host_vars/%s.yml:\n\n' "$HOSTNAME_SHORT"
-    printf '  \033[33m    wol_mac: "%s"\033[0m\n' "$MAC"
-    printf '\n  \033[90m  Note: WoL requires Ethernet (not WiFi) and must be enabled in BIOS.\033[0m\n'
-fi
-
 printf '\n  To remove:  sudo bash remove_benchmark_target.sh\n\n'
