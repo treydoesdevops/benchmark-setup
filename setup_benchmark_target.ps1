@@ -32,14 +32,36 @@ Write-Host ""
 
 # ── Detect LAN subnet ─────────────────────────────────────────────────────────
 Write-Step "Detecting LAN subnet..."
-$route    = Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1
-$localIP  = Get-NetIPAddress -InterfaceIndex $route.InterfaceIndex -AddressFamily IPv4 | Select-Object -First 1
-$prefLen  = $localIP.PrefixLength
-$ipBytes  = [System.Net.IPAddress]::Parse($localIP.IPAddress).GetAddressBytes()
-$mask     = [uint32]([math]::Pow(2, 32) - [math]::Pow(2, 32 - $prefLen))
-$ipInt    = [uint32](($ipBytes[0] -shl 24) -bor ($ipBytes[1] -shl 16) -bor ($ipBytes[2] -shl 8) -bor $ipBytes[3])
-$netInt   = $ipInt -band $mask
-$netBytes = [byte[]]@(($netInt -shr 24) -band 0xFF, ($netInt -shr 16) -band 0xFF, ($netInt -shr 8) -band 0xFF, $netInt -band 0xFF)
+$route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+    Sort-Object -Property RouteMetric |
+    Select-Object -First 1
+if (-not $route) {
+    throw "Could not detect a default route — check network connectivity and re-run."
+}
+
+$localIP = Get-NetIPAddress -InterfaceIndex $route.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if (-not $localIP) {
+    throw "Could not determine a local IPv4 address on interface $($route.InterfaceIndex)."
+}
+
+$prefLen = [int]$localIP.PrefixLength
+$ipBytes = [System.Net.IPAddress]::Parse($localIP.IPAddress).GetAddressBytes()
+
+# Per-octet network calculation via floor division — avoids PowerShell's
+# bitwise operators, which threw 'op_bitwiseand' when the 32-bit pack/shift
+# chain below hit a non-scalar operand on some hardware.
+$netBytes = for ($i = 0; $i -lt 4; $i++) {
+    $bits = [Math]::Min(8, [Math]::Max(0, $prefLen - ($i * 8)))
+    if ($bits -eq 8) {
+        $ipBytes[$i]
+    } elseif ($bits -eq 0) {
+        0
+    } else {
+        $blockSize = [Math]::Pow(2, 8 - $bits)
+        [byte]([Math]::Floor($ipBytes[$i] / $blockSize) * $blockSize)
+    }
+}
 $LanSubnet = "$($netBytes -join '.')/$prefLen"
 Write-Done "LAN subnet: $LanSubnet"
 
