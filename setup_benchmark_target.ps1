@@ -72,12 +72,14 @@ if (-not (Get-LocalUser -Name $ServiceUser -ErrorAction SilentlyContinue)) {
     $randBytes = New-Object byte[] 32
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($randBytes)
     $secPw = ConvertTo-SecureString ([Convert]::ToBase64String($randBytes)) -AsPlainText -Force
-    New-LocalUser `
-        -Name                     $ServiceUser `
-        -Password                 $secPw `
-        -PasswordNeverExpires      $true `
-        -UserMayNotChangePassword  $true `
-        -Description              'Benchmark Ansible — SSH key auth only' | Out-Null
+    $newUserParams = @{
+        Name                     = $ServiceUser
+        Password                 = $secPw
+        PasswordNeverExpires     = $true
+        UserMayNotChangePassword = $true
+        Description              = 'Benchmark Ansible - SSH key auth only'
+    }
+    New-LocalUser @newUserParams | Out-Null
     Write-Done "User '$ServiceUser' created (random password — key auth only)."
 } else {
     Write-Skip "User '$ServiceUser' already exists."
@@ -149,13 +151,15 @@ if (Get-NetFirewallRule -DisplayName $FirewallRule -ErrorAction SilentlyContinue
     Remove-NetFirewallRule -DisplayName $FirewallRule
 }
 
-New-NetFirewallRule `
-    -DisplayName   $FirewallRule `
-    -Direction     Inbound `
-    -Action        Allow `
-    -Protocol      TCP `
-    -LocalPort     22 `
-    -RemoteAddress $LanSubnet | Out-Null
+$fwParams = @{
+    DisplayName   = $FirewallRule
+    Direction     = 'Inbound'
+    Action        = 'Allow'
+    Protocol      = 'TCP'
+    LocalPort     = 22
+    RemoteAddress = $LanSubnet
+}
+New-NetFirewallRule @fwParams | Out-Null
 
 Write-Done "Port 22 open to $LanSubnet only."
 
