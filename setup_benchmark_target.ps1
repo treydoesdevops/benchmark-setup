@@ -163,6 +163,27 @@ New-NetFirewallRule @fwParams | Out-Null
 
 Write-Done "Port 22 open to $LanSubnet only."
 
+# ── Windows Defender exclusion for benchmark tools ───────────────────────────
+# Benchmark worker binaries (e.g. GeekBench's geekbench_avx2.exe, re-extracted
+# fresh each run) are unsigned and unrecognised by Defender's reputation
+# cache. Confirmed via CPU-time sampling on a real run: GeekBench's worker did
+# ~20s of real computation, then flatlined at the exact same CPU-time value
+# indefinitely - consistent with Defender's real-time scan holding/locking a
+# freshly-launched unsigned executable, a documented Defender behavior.
+# Excluding the tools directory from real-time scanning is standard practice
+# for any dedicated benchmark/performance-test machine (it also keeps AV scan
+# overhead from skewing CPU scores below the hardware's real capability) - not
+# a blanket AV change, just this one folder on a non-production test box.
+# Keep in sync with benchmark_install_dir in benchmark/defaults/main.yml.
+Write-Step "Adding Windows Defender exclusion for benchmark tools..."
+$BenchmarkToolsDir = 'C:\benchmark_tools'
+if ((Get-MpPreference).ExclusionPath -notcontains $BenchmarkToolsDir) {
+    Add-MpPreference -ExclusionPath $BenchmarkToolsDir
+    Write-Done "Defender exclusion added for $BenchmarkToolsDir."
+} else {
+    Write-Skip "Defender exclusion already present for $BenchmarkToolsDir."
+}
+
 # ── Restart sshd to pick up all changes ──────────────────────────────────────
 Restart-Service sshd
 Write-Done "sshd restarted."
