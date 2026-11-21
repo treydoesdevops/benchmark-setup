@@ -97,10 +97,40 @@ if (-not $inAdmins) {
 # ── OpenSSH Server ────────────────────────────────────────────────────────────
 Write-Step "Checking OpenSSH Server..."
 
+# Add-WindowsCapability fetches OpenSSH Server as a Feature-on-Demand from
+# Windows Update under the hood - on a freshly-set-up PC that call is known to
+# hang indefinitely (stale/not-yet-synced WU metadata, a slow first contact
+# with the update servers) with no error, no progress, nothing to catch.
+# Confirmed for real 2026-11-21: took 4 manual re-runs of this whole script on
+# a brand new PC before it went through. Bound each attempt with a timeout
+# (background job, same idea as Invoke-Bounded in the benchmark repo's
+# run_benchmarks_windows.ps1) and retry automatically instead of making that
+# the user's problem to notice and fix by hand every time.
+function Install-OpenSshCapability {
+    param([int]$TimeoutSec = 90, [int]$MaxAttempts = 5)
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        Write-Step "Installing OpenSSH Server, attempt $attempt/$MaxAttempts (may take a moment)..."
+        $job = Start-Job -ScriptBlock { Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 }
+        if (Wait-Job $job -Timeout $TimeoutSec) {
+            Receive-Job $job -ErrorAction SilentlyContinue -ErrorVariable jobErr | Out-Null
+            Remove-Job $job -Force
+            if (-not $jobErr) { return $true }
+            Write-Skip "Attempt $attempt failed: $jobErr"
+        } else {
+            Write-Skip "Attempt $attempt timed out after ${TimeoutSec}s waiting on Windows Update - retrying."
+            Stop-Job $job -ErrorAction SilentlyContinue
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+        }
+        if ($attempt -lt $MaxAttempts) { Start-Sleep -Seconds 5 }
+    }
+    return $false
+}
+
 $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server*'
 if ($cap.State -ne 'Installed') {
-    Write-Step "Installing OpenSSH Server (may take a moment)..."
-    Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null
+    if (-not (Install-OpenSshCapability)) {
+        throw "Failed to install OpenSSH Server after several attempts - this is a known Windows Update flakiness issue with Add-WindowsCapability, not necessarily this script. Wait a minute and re-run."
+    }
     Write-Done "OpenSSH Server installed."
 } else {
     Write-Skip "OpenSSH Server already installed."
